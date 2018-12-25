@@ -13,7 +13,12 @@ func render(screen tcell.Screen, state nomad.State) {
 	renderer := nomad.NewAppRenderer()
 	renderer.Render(screen, state)
 
-	screen.SetCell(10, 10, tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorWhite), '#')
+	r := '#'
+	if state.ActivePane == nomad.RIGHT_PANE {
+		r = '$'
+	}
+
+	screen.SetCell(10, 10, tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorWhite), r)
 	screen.Show()
 }
 
@@ -32,6 +37,7 @@ func main() {
 
 	//run := true
 	quit := make(chan int)
+	update := make(chan nomad.Action)
 	path, _ := os.Getwd()
 	files, _ := ioutil.ReadDir(path)
 	var leftList nomad.ListState
@@ -56,7 +62,21 @@ func main() {
 							close(quit)
 							return
 						}
+					case tcell.KeyTab:
+						{
+							update <- nomad.TOGGLE_ACTIVE_PANE
+						}
+					case tcell.KeyRune:
+						{
+							switch event.Rune() {
+							case 'n':
+								update <- nomad.GOTO_NEXT_LINE
+							case 'p':
+								update <- nomad.GOTO_PREV_LINE
+							}
+						}
 					}
+
 				}
 			case *tcell.EventResize:
 				{
@@ -70,9 +90,17 @@ func main() {
 		render(screen, state)
 		select {
 		case <-quit:
-			return
-			break
+			{
+				return
+				break
+			}
+		case action := <-update:
+			{
+				nomad.Update(&state, action)
+				render(screen, state)
+			}
 		}
+
 		screen.SetCell(10, 10, tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorWhite), '#')
 		screen.Show()
 	}
