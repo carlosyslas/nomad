@@ -36,16 +36,19 @@ type Box struct {
 	Size     Size
 }
 
-type PathRenderer struct{}
+type PathRenderer struct {
+	Parent Container
+}
 
 func (r PathRenderer) getPathStyle() tcell.Style {
 	return tcell.StyleDefault.Foreground(tcell.ColorBlue).Background(tcell.ColorBlack)
 }
 
 func (r PathRenderer) Render(screen tcell.Screen, state State) {
+	parentPosition := r.Parent.GetPosition()
 	style := r.getPathStyle()
 
-	puts(screen, 0, 0, state.Path, style)
+	puts(screen, parentPosition.Left, parentPosition.Top, state.Path, style)
 }
 
 type ListRenderer struct {
@@ -94,6 +97,9 @@ func (r DirectoryListRenderer) GetChildren() []Renderer {
 		ListRenderer{
 			Parent: r,
 		},
+		PathRenderer{
+			Parent: r,
+		},
 	}
 }
 
@@ -105,7 +111,37 @@ func NewDirectoryList(container Container, selector DirectoryListSelector) Rende
 }
 
 type LeftPaneRenderer struct {
-	directoryListRenderer DirectoryListRenderer
+	Parent        Container
+	DirectoryList Renderer
+}
+
+func (r LeftPaneRenderer) Render(screen tcell.Screen, state State) {
+	for _, child := range r.GetChildren() {
+		child.Render(screen, state)
+	}
+}
+
+func (r LeftPaneRenderer) GetParent() Container {
+	return r.Parent
+}
+
+func (r LeftPaneRenderer) GetSize() Size {
+	parentSize := r.GetParent().GetSize()
+
+	return Size{
+		Width:  parentSize.Width / 2,
+		Height: parentSize.Height,
+	}
+}
+
+func (r LeftPaneRenderer) GetPosition() Position {
+	return r.GetParent().GetPosition()
+}
+
+func (r LeftPaneRenderer) GetChildren() []Renderer {
+	return []Renderer{
+		NewDirectoryList(r, SelectLeftDirectoryList),
+	}
 }
 
 type RightPaneRenderer struct {
@@ -165,7 +201,7 @@ func (r appRenderer) GetParent() Container {
 
 func (r appRenderer) GetSize() Size {
 	return Size{
-		Width: 50,
+		Width: 80,
 	}
 }
 func (r appRenderer) GetPosition() Position {
@@ -180,8 +216,9 @@ func NewAppRenderer() Renderer {
 	renderer := appRenderer{}
 
 	renderer.children = []Renderer{
-		PathRenderer{},
-		//ListRenderer{},
+		LeftPaneRenderer{
+			Parent: renderer,
+		},
 		RightPaneRenderer{
 			Parent: renderer,
 		},

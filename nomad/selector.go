@@ -13,3 +13,7 @@ func SelectRightPane(state State) RightPane {
 func SelectRightDirectoryList(state State) DirectoryList {
 	return state.RightPane.List
 }
+
+func SelectLeftDirectoryList(state State) DirectoryList {
+	return state.LeftPane.List
+}
