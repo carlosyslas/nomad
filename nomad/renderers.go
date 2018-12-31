@@ -10,23 +10,30 @@ func puts(screen tcell.Screen, x int, y int, text string, style tcell.Style) {
 	}
 }
 
+type Container interface {
+	GetParent() Container
+	GetSize() Size
+	GetPosition() Position
+	GetChildren() []Renderer
+}
+
 type Renderer interface {
 	Render(screen tcell.Screen, state State)
 }
 
 type Position struct {
-	left int
-	top  int
+	Left int
+	Top  int
 }
 
 type Size struct {
-	width  int
-	height int
+	Width  int
+	Height int
 }
 
 type Box struct {
-	position Position
-	size     Size
+	Position Position
+	Size     Size
 }
 
 type PathRenderer struct{}
@@ -42,27 +49,103 @@ func (r PathRenderer) Render(screen tcell.Screen, state State) {
 }
 
 type ListRenderer struct {
-	position Position
-	size     Size
+	Parent Container
 }
 
 func (r ListRenderer) Render(screen tcell.Screen, state State) {
+	position := r.Parent.GetPosition()
+	// TODO: Use parent selector
 	for i, item := range state.LeftList.Items {
 		style := tcell.StyleDefault
 		if i == state.LeftList.Selected {
 			style = style.Background(tcell.ColorWhite).Foreground(tcell.ColorBlack)
 		}
-		puts(screen, r.position.left+1, r.position.top+i, item, style)
+		puts(screen, position.Left+1, position.Top+i+1, item, style)
 	}
 }
 
 type DirectoryListRenderer struct {
+	Parent       Container
+	Selector     DirectoryListSelector
 	pathRenderer PathRenderer
-	listRenderer ListRenderer
+	ListRenderer ListRenderer
+}
+
+func (r DirectoryListRenderer) Render(screen tcell.Screen, state State) {
+	for _, child := range r.GetChildren() {
+		child.Render(screen, state)
+	}
+}
+
+func (r DirectoryListRenderer) GetParent() Container {
+	return r.Parent
+}
+
+func (r DirectoryListRenderer) GetSize() Size {
+	return r.GetParent().GetSize()
+}
+
+func (r DirectoryListRenderer) GetPosition() Position {
+	return r.GetParent().GetPosition()
+}
+
+func (r DirectoryListRenderer) GetChildren() []Renderer {
+	return []Renderer{
+		ListRenderer{
+			Parent: r,
+		},
+	}
+}
+
+func NewDirectoryList(container Container, selector DirectoryListSelector) Renderer {
+	return DirectoryListRenderer{
+		Parent:   container,
+		Selector: selector,
+	}
 }
 
 type LeftPaneRenderer struct {
 	directoryListRenderer DirectoryListRenderer
+}
+
+type RightPaneRenderer struct {
+	Parent        Container
+	DirectoryList Renderer
+}
+
+func (r RightPaneRenderer) Render(screen tcell.Screen, state State) {
+	for _, child := range r.GetChildren() {
+		child.Render(screen, state)
+	}
+}
+
+func (r RightPaneRenderer) GetParent() Container {
+	return r.Parent
+}
+
+func (r RightPaneRenderer) GetSize() Size {
+	parentSize := r.GetParent().GetSize()
+
+	return Size{
+		Width:  parentSize.Width / 2,
+		Height: parentSize.Height,
+	}
+}
+
+func (r RightPaneRenderer) GetChildren() []Renderer {
+	return []Renderer{
+		NewDirectoryList(r, SelectRightDirectoryList),
+	}
+}
+
+func (r RightPaneRenderer) GetPosition() Position {
+	parentPosition := r.GetParent().GetPosition()
+	parentSize := r.GetParent().GetSize()
+
+	return Position{
+		Left: parentPosition.Left + parentSize.Width/2,
+		Top:  parentPosition.Top,
+	}
 }
 
 // This could be a container instead of app
@@ -76,11 +159,33 @@ func (r appRenderer) Render(screen tcell.Screen, state State) {
 	}
 }
 
+func (r appRenderer) GetParent() Container {
+	return nil
+}
+
+func (r appRenderer) GetSize() Size {
+	return Size{
+		Width: 50,
+	}
+}
+func (r appRenderer) GetPosition() Position {
+	return Position{}
+}
+
+func (r appRenderer) GetChildren() []Renderer {
+	return r.children
+}
+
 func NewAppRenderer() Renderer {
-	return appRenderer{
-		children: []Renderer{
-			PathRenderer{},
-			ListRenderer{position: Position{0, 1}},
+	renderer := appRenderer{}
+
+	renderer.children = []Renderer{
+		PathRenderer{},
+		//ListRenderer{},
+		RightPaneRenderer{
+			Parent: renderer,
 		},
 	}
+
+	return renderer
 }

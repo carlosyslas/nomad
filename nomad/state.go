@@ -16,11 +16,11 @@ type State struct {
 }
 
 type LeftPane struct {
-	list DirectoryList
+	List DirectoryList
 }
 
 type RightPane struct {
-	list DirectoryList
+	List DirectoryList
 }
 
 type ListState struct {
